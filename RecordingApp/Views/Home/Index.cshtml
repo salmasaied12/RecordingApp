@@ -1,0 +1,97 @@
+﻿@model IEnumerable<RecordingApp.Models.AudioModel>
+
+    @{
+        ViewData["Title"] = "Audio Recorder";
+    }
+
+    <h2>Audio Recorder</h2>
+
+    <button id="recordButton">Record</button>
+    <button id="stopButton" disabled>Stop</button>
+
+    <audio id="audioPlayback" controls></audio>
+
+<form asp-controller="Audio" asp-action="SaveAudio" method="post" enctype="multipart/form-data">
+    <input type="file" id="audioFile" name="audioFile" hidden />
+    <button type="submit">Save Audio</button>
+</form>
+
+
+    <h3>Saved Recordings</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>FileName</th>
+                <th>RecordedOn</th>
+                <th>Audio</th>
+            </tr>
+        </thead>
+        <tbody>
+    @if (Model != null && Model.Any())
+    {
+        @foreach (var recording in Model)
+        {
+            <tr>
+                <td>@recording.FileName</td>
+                <td>@recording.RecordedOn</td>
+                <td>
+                    <audio controls>
+                        <source src="~/audios/@recording.FileName" type="audio/wav" />
+                        Your browser does not support the audio element.
+                    </audio>
+                </td>
+            </tr>
+        }
+    }
+    else
+    {
+        <tr>
+            <td colspan="3">No recordings found.</td>
+        </tr>
+    }
+</tbody>
+
+    </table>
+
+@section Scripts {
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+
+        const recordButton = document.getElementById("recordButton");
+        const stopButton = document.getElementById("stopButton");
+        const audioPlayback = document.getElementById("audioPlayback");
+        const audioFile = document.getElementById("audioFile");
+
+        recordButton.addEventListener("click", async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.start();
+
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+                audioChunks = [];
+                const audioUrl = URL.createObjectURL(audioBlob);
+                audioPlayback.src = audioUrl;
+
+                const file = new File([audioBlob], "recorded-audio.wav", { type: "audio/wav" });
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                audioFile.files = dataTransfer.files;
+            };
+
+            recordButton.disabled = true;
+            stopButton.disabled = false;
+        });
+
+        stopButton.addEventListener("click", () => {
+            mediaRecorder.stop();
+            recordButton.disabled = false;
+            stopButton.disabled = true;
+        });
+    </script>
+}
