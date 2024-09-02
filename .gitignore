@@ -1,0 +1,11 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs/ProjectEvaluation/recordingapp.metadata.v9.bin
+/.vs/RecordingApp/FileContentIndex/0c96a209-2b4e-4874-9cea-626116bbbd7e.vsidx
+/.vs/*
+/.vs/
+/RecordingApp/obj/*
+/RecordingApp/obj/
+
