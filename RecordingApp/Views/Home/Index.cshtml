@@ -1,4 +1,4 @@
-﻿@model IEnumerable<RecordingApp.Models.AudioModel>
+﻿@* @model IEnumerable<RecordingApp.Models.AudioModel>
 
 @{
     ViewData["Title"] = "Audio Recorder";
@@ -23,7 +23,7 @@
         <button type="submit" class="btn btn-primary">Save Audio</button>
     </form>
 
-    <button type="button" class="btn btn-info">Transcription</button>
+    //<button type="button" class="btn btn-info">Transcription</button>
     <textarea rows="3" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd;" placeholder="Transcription will appear here..."></textarea>
 
 
@@ -139,4 +139,176 @@
             return wavBlob;
         }
     </script>
+} *@
+
+
+
+@model IEnumerable<RecordingApp.Models.AudioModel>
+
+@{
+    ViewData["Title"] = "Audio Recorder";
 }
+
+<!-- Page Wrapper -->
+<div style="background-color: #f4f7f9; padding: 40px; font-family: Arial, sans-serif; min-height: 100vh;">
+    <h2 style="color: #4A90E2; margin-bottom: 20px;">Audio Recorder</h2>
+
+    <!-- Recorder Controls -->
+    <div style="margin-bottom: 20px;">
+        <button id="recordButton" class="btn btn-success" style="margin-right: 10px;">Record</button>
+        <button id="stopButton" class="btn btn-danger" disabled>Stop</button>
+    </div>
+
+    <!-- Audio Playback -->
+    <audio id="audioPlayback" controls style="margin-bottom: 20px; width: 100%;"></audio>
+
+    <!-- Form to Save Audio -->
+    <form id="audioForm" enctype="multipart/form-data" style="margin-bottom: 30px;">
+        <input type="file" id="audioFile" name="audioFile" hidden />
+        <button type="submit" class="btn btn-primary">Save Audio</button>
+    </form>
+
+    <!-- Transcription Text Area -->
+    <textarea id="transcriptionArea" rows="3" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd;" placeholder="Transcription will appear here..."></textarea>
+
+    <!-- Saved Recordings Section -->
+    <h3 style="color: #4A90E2; margin-bottom: 20px;">Saved Recordings</h3>
+    <table id="recordingsTable" class="table table-striped">
+        <thead>
+            <tr>
+                <th>FileName</th>
+                <th>RecordedOn</th>
+                <th>Audio</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model != null && Model.Any())
+            {
+                @foreach (var recording in Model)
+                {
+                    <tr>
+                        <td>@recording.FileName</td>
+                        <td>@recording.RecordedOn</td>
+                        <td>
+                            <audio controls>
+                                <source src="@Url.Content(recording.FilePath)" type="audio/wav" />
+                            </audio>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-info">Transcription</button>
+                        </td>
+                    </tr>
+                    <!-- Transcription Text Area -->
+                    <tr>
+                        <td colspan="4">
+                            <textarea rows="3" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd;" placeholder="Transcription will appear here...">@recording.TranscriptionText</textarea>
+                        </td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="4">No recordings found.</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@section Scripts {
+    <script src="/Scripts/audiobuffer-to-wav.js"> </script>
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+
+        const recordButton = document.getElementById("recordButton");
+        const stopButton = document.getElementById("stopButton");
+        const audioPlayback = document.getElementById("audioPlayback");
+        const audioFile = document.getElementById("audioFile");
+        const form = document.getElementById('audioForm');
+        const transcriptionArea = document.getElementById('transcriptionArea');
+
+        // Handle recording
+        recordButton.addEventListener("click", async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            let options = { mimeType: 'audio/webm' };
+            mediaRecorder = new MediaRecorder(stream, options);
+            mediaRecorder.start();
+
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+                audioChunks = [];
+                const wavBlob = await convertWebMToWav(audioBlob);
+                const audioUrl = URL.createObjectURL(audioBlob);
+                audioPlayback.src = audioUrl;
+
+                const file = new File([wavBlob], "recorded-audio.wav", { type: "audio/wav" });
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                audioFile.files = dataTransfer.files;
+            };
+
+            recordButton.disabled = true;
+            stopButton.disabled = false;
+        });
+
+        stopButton.addEventListener("click", () => {
+            mediaRecorder.stop();
+            recordButton.disabled = false;
+            stopButton.disabled = true;
+        });
+
+        // Handle form submission to save audio and retrieve transcription
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            const formData = new FormData(form);
+            $.ajax({
+                url: '@Url.Action("SaveAudio", "Audio")',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    if (response.success) {
+                        // Display transcription in the textarea
+                        transcriptionArea.value = response.transcription;
+                    } else {
+                        alert(response.message);
+                    }
+                },
+                error: function (xhr, status, error) {
+                    alert('Error: ' + error);
+                }
+            });
+        });
+
+        // Convert WebM to WAV
+        async function convertWebMToWav(webmBlob) {
+            const audioContext = new AudioContext();
+
+            // Convert WebM blob to ArrayBuffer
+            const arrayBuffer = await webmBlob.arrayBuffer();
+
+            // Decode the audio data from WebM format
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+            // Convert the AudioBuffer to a WAV format
+            const wavArrayBuffer = audioBufferToWav(audioBuffer);
+
+            // Create a new Blob in WAV format
+            const wavBlob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
+
+            return wavBlob;
+        }
+    </script>
+}
+ 
+
+

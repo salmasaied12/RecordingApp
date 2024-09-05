@@ -7,5 +7,6 @@
         public DateTime RecordedOn { get; set; }
         public string FilePath { get; set; }
         public string Transcription { get; set; } // whisper
+        public string TranscriptionText { get; set; } //AssemblyAi
     }
 }

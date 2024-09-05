@@ -7,15 +7,19 @@ namespace RecordingApp.Controllers
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
+        private readonly AppDbContext _context;
 
-        public HomeController(ILogger<HomeController> logger)
+        public HomeController(ILogger<HomeController> logger, AppDbContext context)
         {
             _logger = logger;
+            _context = context;
         }
 
         public IActionResult Index()
         {
-            return View();
+            var recordings = _context.AudioFiles.ToList();
+            return View(recordings);
+            
         }
 
         public IActionResult Privacy()
