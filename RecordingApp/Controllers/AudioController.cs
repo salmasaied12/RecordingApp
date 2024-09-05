@@ -1,7 +1,4 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using RecordingApp.Models;
 
 public class AudioController : Controller
@@ -24,40 +21,53 @@ public class AudioController : Controller
     {
         if (audioFile != null && audioFile.Length > 0)
         {
-            // Generate a unique file name using a GUID
-            var uniqueFileName = Guid.NewGuid().ToString() + Path.GetExtension(audioFile.FileName);
-            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/audios", uniqueFileName);
-
-
-            if (!Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/audios")))
+            try
             {
-                Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/audios"));
+                var uniqueFileName = Guid.NewGuid().ToString() + Path.GetExtension(audioFile.FileName);
+                var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/audios", uniqueFileName);
+
+                if (!Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/audios")))
+                {
+                    Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/audios"));
+                }
+
+                // Save the file
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    audioFile.CopyTo(stream);
+                }
+
+                // Create and save audio record to the database
+                var audio = new AudioModel
+                {
+                    FileName = uniqueFileName,
+                    RecordedOn = DateTime.Now,
+                    FilePath = "/audios/" + uniqueFileName
+                };
+
+                _context.AudioFiles.Add(audio);
+                _context.SaveChanges();
+
+                // Return JSON response indicating success and the updated list of recordings
+                var recordings = _context.AudioFiles.ToList();
+                return Json(new { success = true, message = "File saved successfully", recordings });
             }
-
-            // Save the file
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            catch (Exception ex)
             {
-                audioFile.CopyTo(stream);
+                // Handle exceptions and return an error response
+                return Json(new { success = false, message = "An error occurred: " + ex.Message });
             }
-
-            // Create and save audio record to database
-            var audio = new AudioModel
-            {
-                FileName = uniqueFileName,
-                RecordedOn = DateTime.Now,
-                FilePath = "/audios/" + uniqueFileName
-            };
-
-           
-
-            _context.AudioFiles.Add(audio);
-            _context.SaveChanges();
-
         }
 
-        return BadRequest("file saved.");
+        return Json(new { success = false, message = "No file was uploaded." });
     }
 
+    [HttpGet]
+    public IActionResult GetRecordings()
+    {
+        var recordings = _context.AudioFiles.ToList();
+        return Json(recordings);
+    }
+
+
 }
-
-

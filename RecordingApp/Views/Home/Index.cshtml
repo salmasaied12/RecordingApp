@@ -1,57 +1,78 @@
 ﻿@model IEnumerable<RecordingApp.Models.AudioModel>
 
-    @{
-        ViewData["Title"] = "Audio Recorder";
-    }
+@{
+    ViewData["Title"] = "Audio Recorder";
+}
 
-    <h2>Audio Recorder</h2>
+<!-- Page Wrapper -->
+<div style="background-color: #f4f7f9; padding: 40px; font-family: Arial, sans-serif; min-height: 100vh;">
+    <h2 style="color: #4A90E2; margin-bottom: 20px;">Audio Recorder</h2>
 
-    <button id="recordButton">Record</button>
-    <button id="stopButton" disabled>Stop</button>
+    <!-- Recorder Controls -->
+    <div style="margin-bottom: 20px;">
+        <button id="recordButton" class="btn btn-success" style="margin-right: 10px;">Record</button>
+        <button id="stopButton" class="btn btn-danger" disabled>Stop</button>
+    </div>
 
-    <audio id="audioPlayback" controls></audio>
+    <!-- Audio Playback -->
+    <audio id="audioPlayback" controls style="margin-bottom: 20px; width: 100%;"></audio>
 
-<form asp-controller="Audio" asp-action="SaveAudio" method="post" enctype="multipart/form-data">
-    <input type="file" id="audioFile" name="audioFile" hidden />
-    <button type="submit">Save Audio</button>
-</form>
+    <!-- Form to Save Audio -->
+    <form asp-controller="Audio" asp-action="SaveAudio" method="post" enctype="multipart/form-data" style="margin-bottom: 30px;">
+        <input type="file" id="audioFile" name="audioFile" hidden />
+        <button type="submit" class="btn btn-primary">Save Audio</button>
+    </form>
+
+    <button type="button" class="btn btn-info">Transcription</button>
+    <textarea rows="3" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd;" placeholder="Transcription will appear here..."></textarea>
 
 
-    <h3>Saved Recordings</h3>
-    <table class="table">
+    <!-- Saved Recordings Section -->
+    <h3 style="color: #4A90E2; margin-bottom: 20px;">Saved Recordings</h3>
+    <table id="recordingsTable" class="table table-striped">
         <thead>
             <tr>
                 <th>FileName</th>
                 <th>RecordedOn</th>
                 <th>Audio</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
-    @if (Model != null && Model.Any())
-    {
-        @foreach (var recording in Model)
-        {
-            <tr>
-                <td>@recording.FileName</td>
-                <td>@recording.RecordedOn</td>
-                <td>
-                    <audio controls>
-                        <source src="~/audios/@recording.FileName" type="audio/wav" />
-                        Your browser does not support the audio element.
-                    </audio>
-                </td>
-            </tr>
-        }
-    }
-    else
-    {
-        <tr>
-            <td colspan="3">No recordings found.</td>
-        </tr>
-    }
-</tbody>
+            @if (Model != null && Model.Any())
+            {
+                @foreach (var recording in Model)
+                {
+                    <tr>
+                        <td>@recording.FileName</td>
+                        <td>@recording.RecordedOn</td>
+                        <td>
+                            <audio controls>
+                                <source src="@Url.Content(recording.FilePath)" type="audio/wav" />
+                            </audio>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-info">Transcription</button>
+                        </td>
+                    </tr>
+                    <!-- Transcription Text Area -->
+                    <tr>
+                        <td colspan="4">
+                            <textarea rows="3" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd;" placeholder="Transcription will appear here..."></textarea>
+                        </td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="4">No recordings found.</td>
+                </tr>
+            }
 
+        </tbody>
     </table>
+</div>
 
 @section Scripts {
     <script>
@@ -62,7 +83,9 @@
         const stopButton = document.getElementById("stopButton");
         const audioPlayback = document.getElementById("audioPlayback");
         const audioFile = document.getElementById("audioFile");
+        const form = document.querySelector('form'); // Select the form
 
+        // Handle recording
         recordButton.addEventListener("click", async () => {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(stream);
@@ -93,5 +116,62 @@
             recordButton.disabled = false;
             stopButton.disabled = true;
         });
+
+        // Handle form submission
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const formData = new FormData(form);
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                alert(result.message); // Show success message
+                updateTable(); // Update the table with the new list of recordings
+            } else {
+                alert(result.message); // Show error message
+            }
+        });
+
+        // Update table with recordings
+        async function updateTable() {
+            const response = await fetch('/Audio/GetRecordings');
+            const recordings = await response.json();
+            const tableBody = document.querySelector('#recordingsTable tbody');
+            tableBody.innerHTML = ''; // Clear existing rows
+
+            if (recordings.length > 0) {
+                recordings.forEach(recording => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                                                <td>${recording.fileName}</td>
+                                                <td>${new Date(recording.recordedOn).toLocaleString()}</td>
+                                                <td><audio controls><source src="${recording.filePath}" type="audio/wav" /></audio></td>
+                                                <td><button type="button" class="btn btn-info">Transcription</button></td>
+                                            `;
+                    tableBody.appendChild(row);
+
+                    // Add transcription text area
+                    const textAreaRow = document.createElement('tr');
+                    textAreaRow.innerHTML = `
+                                        <td colspan="4">
+                                            <textarea rows="3" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd;" placeholder="Transcription will appear here..."></textarea>
+                                        </td>
+                                    `;
+                    tableBody.appendChild(textAreaRow);
+                });
+            } else {
+                const row = document.createElement('tr');
+                row.innerHTML = '<td colspan="4">No recordings found.</td>';
+                tableBody.appendChild(row);
+            }
+        }
+
+        // Initialize table content on page load
+        window.addEventListener('load', updateTable);
     </script>
 }
