@@ -54,6 +54,7 @@
     </table>
 
 @section Scripts {
+    <script src="/Scripts/audiobuffer-to-wav.js"> </script>
     <script>
         let mediaRecorder;
         let audioChunks = [];
@@ -65,20 +66,23 @@
 
         recordButton.addEventListener("click", async () => {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
+            let options = { mimeType: 'audio/webm' };
+            mediaRecorder = new MediaRecorder(stream, options);
             mediaRecorder.start();
 
             mediaRecorder.ondataavailable = (event) => {
                 audioChunks.push(event.data);
             };
 
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+                debugger
+                const wavBlob = await convertWebMToWav(audioBlob);
                 audioChunks = [];
                 const audioUrl = URL.createObjectURL(audioBlob);
                 audioPlayback.src = audioUrl;
 
-                const file = new File([audioBlob], "recorded-audio.wav", { type: "audio/wav" });
+                const file = new File([wavBlob], "recorded-audio.wav", { type: "audio/wav" });
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(file);
                 audioFile.files = dataTransfer.files;
@@ -93,5 +97,23 @@
             recordButton.disabled = false;
             stopButton.disabled = true;
         });
+
+        async function convertWebMToWav(webmBlob) {
+            const audioContext = new AudioContext();
+
+            // Convert WebM blob to ArrayBuffer
+            const arrayBuffer = await webmBlob.arrayBuffer();
+
+            // Decode the audio data from WebM format
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+            // Convert the AudioBuffer to a WAV format
+            const wavArrayBuffer = audioBufferToWav(audioBuffer);
+
+            // Create a new Blob in WAV format
+            const wavBlob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
+
+            return wavBlob;
+        }
     </script>
 }
