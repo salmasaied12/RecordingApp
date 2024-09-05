@@ -75,6 +75,7 @@
 </div>
 
 @section Scripts {
+    <script src="/Scripts/audiobuffer-to-wav.js"> </script>
     <script>
         let mediaRecorder;
         let audioChunks = [];
@@ -88,20 +89,23 @@
         // Handle recording
         recordButton.addEventListener("click", async () => {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
+            let options = { mimeType: 'audio/webm' };
+            mediaRecorder = new MediaRecorder(stream, options);
             mediaRecorder.start();
 
             mediaRecorder.ondataavailable = (event) => {
                 audioChunks.push(event.data);
             };
 
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+                debugger
+                const wavBlob = await convertWebMToWav(audioBlob);
                 audioChunks = [];
                 const audioUrl = URL.createObjectURL(audioBlob);
                 audioPlayback.src = audioUrl;
 
-                const file = new File([audioBlob], "recorded-audio.wav", { type: "audio/wav" });
+                const file = new File([wavBlob], "recorded-audio.wav", { type: "audio/wav" });
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(file);
                 audioFile.files = dataTransfer.files;
@@ -117,61 +121,22 @@
             stopButton.disabled = true;
         });
 
-        // Handle form submission
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault();
+        async function convertWebMToWav(webmBlob) {
+            const audioContext = new AudioContext();
 
-            const formData = new FormData(form);
-            const response = await fetch(form.action, {
-                method: 'POST',
-                body: formData
-            });
+            // Convert WebM blob to ArrayBuffer
+            const arrayBuffer = await webmBlob.arrayBuffer();
 
-            const result = await response.json();
+            // Decode the audio data from WebM format
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-            if (result.success) {
-                alert(result.message); // Show success message
-                updateTable(); // Update the table with the new list of recordings
-            } else {
-                alert(result.message); // Show error message
-            }
-        });
+            // Convert the AudioBuffer to a WAV format
+            const wavArrayBuffer = audioBufferToWav(audioBuffer);
 
-        // Update table with recordings
-        async function updateTable() {
-            const response = await fetch('/Audio/GetRecordings');
-            const recordings = await response.json();
-            const tableBody = document.querySelector('#recordingsTable tbody');
-            tableBody.innerHTML = ''; // Clear existing rows
+            // Create a new Blob in WAV format
+            const wavBlob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
 
-            if (recordings.length > 0) {
-                recordings.forEach(recording => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                                                <td>${recording.fileName}</td>
-                                                <td>${new Date(recording.recordedOn).toLocaleString()}</td>
-                                                <td><audio controls><source src="${recording.filePath}" type="audio/wav" /></audio></td>
-                                                <td><button type="button" class="btn btn-info">Transcription</button></td>
-                                            `;
-                    tableBody.appendChild(row);
-
-                    // Add transcription text area
-                    const textAreaRow = document.createElement('tr');
-                    textAreaRow.innerHTML = `
-                                        <td colspan="4">
-                                            <textarea rows="3" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd;" placeholder="Transcription will appear here..."></textarea>
-                                        </td>
-                                    `;
-                    tableBody.appendChild(textAreaRow);
-                });
-            } else {
-                const row = document.createElement('tr');
-                row.innerHTML = '<td colspan="4">No recordings found.</td>';
-                tableBody.appendChild(row);
-            }
+            return wavBlob;
         }
-
-        // Initialize table content on page load
-        window.addEventListener('load', updateTable);
     </script>
 }
