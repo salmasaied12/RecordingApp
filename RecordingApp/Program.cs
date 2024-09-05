@@ -18,7 +18,7 @@ builder.Services.AddSingleton(new TranscriptionService("87fe47eaa8b6482093730fa1
 builder.Services.AddSingleton<SpeechRecognitionService>(provider =>
 {
     // Replace with your actual API key and URL, or load from configuration
-    var apiKey = "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";
+    var apiKey = "";
     var apiUrl = "https://api.openai.com/v1/audio/transcriptions";
     return new SpeechRecognitionService(apiKey, apiUrl);
 });
